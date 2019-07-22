@@ -1,11 +1,10 @@
-# client2.py
-# !/usr/bin/env python
 
+# client.py
 import socket
 
-TCP_IP = 'localhost'
-TCP_PORT = 6666
-BUFFER_SIZE = 104
+host = 'localhost'
+port = 6666
+buff_size = 104
 
 
 class Client():
@@ -15,12 +14,12 @@ class Client():
 
         if option == int(1):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((TCP_IP, TCP_PORT))
+            s.connect((host, port))
             with open('received_file', 'wb') as f:
                 print('file opened')
                 while True:
                     # print('receiving data...')
-                    data = s.recv(BUFFER_SIZE)
+                    data = s.recv(100)
                     print('data=%s', (data))
                     if not data:
                         f.close()
