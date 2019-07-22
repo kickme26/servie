@@ -4,9 +4,9 @@ from threading import Thread
 import threading
 import os
 
-TCP_IP = 'localhost'
-TCP_PORT = 6666
-BUFFER_SIZE = 1024
+host = 'localhost'
+port = 6666
+buff_size = 1024
 
 
 class ClientThread(Thread):
@@ -24,11 +24,11 @@ class ClientThread(Thread):
         filename = 'mytext.txt'
         f = open(filename, 'rb')
         while True:
-            l = f.read(BUFFER_SIZE)
+            l = f.read(buff_size)
             while (l):
                 self.sock.send(l)
                 # print('Sent ',repr(l))
-                l = f.read(BUFFER_SIZE)
+                l = f.read(buff_size)
 
             if not l:
                 f.close()
@@ -46,7 +46,7 @@ class ClientThread(Thread):
 
 tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-tcpsock.bind((TCP_IP, TCP_PORT))
+tcpsock.bind((host, port))
 threads = []
 id_list = []
 
