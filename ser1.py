@@ -155,3 +155,66 @@ class Server:
 if __name__ == '__main__':
     se = Server()
     se.run()
+    
+    
+    
+    
+    
+#     updated with dict keys and values
+'''
+
+class Server:
+    sock = socket()
+    sock.bind(('', 5000))
+    sock.listen(5)
+    pid = ''
+
+    print('Waiting for a client...')
+    client, address = sock.accept()
+    print(f'Client joined from {address}')
+
+    def genid(self):
+        pid = random.randint(4444, 5455)
+        print(pid)
+        lid.append(pid)
+        print(lid)
+        print("============", )
+        status[pid] = "id generated"
+        print(status[pid])
+        return pid
+
+    def run(self):
+        Server.genid(self)
+        with Server.client as p:
+
+            for path, dirs, files in os.walk(r'F:\Tor Browser\Browser\fonts'):
+                for file in files:
+                    filename = os.path.join(path, file)
+                    relpath = os.path.relpath(filename, r'F:\Tor Browser\Browser\fonts')
+                    filesize = os.path.getsize(filename)
+
+                    status[Server.pid]="sending"
+                    print("========",status[Server.pid])
+                    print(f'Sending {relpath}')
+
+                    print("rp++", relpath)
+                    print("fn", filename)
+                    print("fs", filesize)
+
+                    with open(filename, 'rb') as f:
+                        p.sendall(relpath.encode() + b'\n')  # sending and encoding
+                        p.sendall(str(filesize).encode() + b'\n')
+
+                        # Send the file in chunks so large files can be handled.
+                        while True:
+                            data = f.read(buff_size)
+                            if not data: break
+                            p.sendall(data)
+            print('Done.', lid)
+
+
+if __name__ == '__main__':
+    se = Server()
+    se.run()
+
+'''
