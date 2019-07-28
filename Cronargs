@@ -1,0 +1,207 @@
+# server srt main
+
+import configparser
+import argparse
+import os
+import socket
+import random
+import re
+
+
+class App:
+    # Defines the commamd line, configuration and starts server
+
+    def __init__(self):
+        """
+        Setup the command line arguments and default config parameters
+        """
+        config = configparser.ConfigParser()
+
+        # print("reading")
+        config.read(r'C:\Users\guna\PycharmProjects\untitled5\setup.ini')
+        config.sections()
+        # print("sections done")
+        f = config['NETWORK']
+        self.port = int(f['PORT'])  # port
+        self.host = f['HOST']  # host
+        self.buff_size = int(f['BUFF_SIZE'])
+
+    def listenn(self):
+        # print("socketing")
+        self.s = socket.socket()
+        self.s.bind((self.host, self.port))
+        print("listening...")
+        self.s.listen(5)
+
+    def handle_request(self):
+        conn, addr = self.s.accept()
+        print("======after accepting request=====")
+
+        print(f"got connection from{addr}")
+        self.prid = random.randint(4444, 5555)
+        print("====", self.prid)
+
+        self.client_data = conn.recv(self.buff_size)
+
+        # if re.match(str(r"<lance ID=1>"), str(self.client_data)):
+        #     print(f"received: {self.client_data}")
+        #     print('<message ok message>')
+        # else:
+        #     print('message wrong')
+
+
+class Messageparser(App):
+    def __init__(self):
+        super().__init__()
+        self.parser = argparse.ArgumentParser()
+
+    def messasge(self):
+        print("entered message module")
+
+        print("argpass")
+        self.parser.add_argument('-l', '--lance', help="PASS THE ARGUMENTS HERE ")
+        self.parser.add_argument('--id', help="NAMING ID", type=int)
+        args = self.parser.parse_args()
+        print("args", args)
+        if args.lance:
+            print("boom")
+        else:
+            print("errrrrr")
+class Launchmessage:
+    pass
+
+class Tracemessage:
+    pass
+
+def main():
+    c = App()
+    # m = Messageparser()
+    c.listenn()
+    c.handle_request()
+    # m.messasge()
+
+
+if __name__ == '__main__':
+    main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# cmd and functionalities
+
+'''
+print(sys.argv)
+
+parser = argparse.ArgumentParser()
+parser.add_argument('option')   # 'option' is the 'dest'
+args = parser.parse_args()
+print(args)
+
+if 'CREATE' in args.option:
+    print('creating')
+elif 'SHOW' in args.option:
+    print('showing')
+else:
+    print('else')
+'''
+
+import re
+import random
+
+
+class Message:
+
+    def __init__(self):
+        self.string = '<LANCE ID=Token1 M=Process.node2 COLOR=GREEN>'
+        self.randid = random.randint(333, 444)
+        self.result = re.split(' ', self.string.strip('<>'))
+        self.listid = []
+        self.m = ''
+        self.status = {'Token2': '2', 'Token3': 3, 'Token1': 4}
+
+    def classify(self):
+        print(self.result[0])
+        print(self.result[1])
+        print(self.result[2])
+        print(self.result[3])
+        self.m = str(self.result[2]).split('=')
+        # print("==", self.m)  Module to process M
+
+        if self.result[0] == 'LANCE' and self.m[0] == 'M':      # have to use regx for checking pattern
+            return Process.lapa(self)
+
+        elif self.result[0] == 'TRACE':
+            return Parsingmessage.trace(self)
+        else:
+            return "command error"
+
+
+class Parsingmessage(Message):
+    def __init__(self):
+        super().__init__()  # try adding self inside  'doubt?'
+        self.id_number = ''
+        self.id_split = ''
+        self.action = ''
+
+    def lapa(self):
+        # print("reached launch class")
+        self.id_split = str(self.result[1]).split('=')   # splitting ID=Tokenid with =
+        # print(self.id_split)                           # id_split [id, token]
+        self.id_number = self.id_split[1]
+        # print(self.id_number)                          # id_number [id]
+        self.listid.append(self.id_number)
+        # print("added in list")
+        self.status[self.id_number] = "id generated"     # updating the status of the ID
+        # print(self.status, self.listid)
+        # print(self.m[1])                               # m[1] = after'M='  Process.node1
+        d = self.m[1]
+
+        if d == 'Process.node1':
+            return Process.node1(self)
+        return Process.node2(self)
+
+        # def trace(self):
+        #     print("reached Trace module")
+        #     self.id_split = str(self.result[1]).split('=')
+        #     print(self.id_split)
+        #     self.id_number = self.id_split[1]
+        #     print(self.id_number)
+        # if self.id_number in self.status.keys():
+        #     print(self.status.get(self.id_number))
+        # else:
+        #     print("no id is present")
+
+
+class Process(Parsingmessage):
+    def __init__(self):
+        super().__init__()
+
+    def node1(self):
+        print('node == 1')
+        self.status[self.id_number] = 'Hey im still here in Node-1 '
+        print(self.status)
+
+    def node2(self):
+        print('node ====2')
+        self.status[self.id_number] = 'Now im in the second Node'
+
+
+if __name__ == '__main__':
+    m = Message()
+    m.classify()
+    l = Parsingmessage()
