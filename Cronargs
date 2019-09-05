@@ -1,207 +1,478 @@
-# server srt main
-
+#!/usr/bin/python
+"""
+To create a mock workflow server, called MCQ. It must be able to
+simulate the actions done by the actual workflow
+"""
 import configparser
 import argparse
 import os
 import socket
-import random
+import time
+import sys
 import re
+import datetime
+import random
+import _thread
+
+CLIENT_STRING = None
 
 
 class App:
-    # Defines the commamd line, configuration and starts server
-
+    """This class checks the config file a"""
     def __init__(self):
+        self.parser = argparse.ArgumentParser(description="Sample Project")
+        # Add the positional parameter
+        self.parser.add_argument('-confi', help="Enter the config path followed\
+                                 by the -conficommand", required=False,
+                                 default=r"C:\Users\jouve\PycharmProjects\untitled6\mytext.ini")
+        self.cfread = None
+        self.config = None
+        self.conn = None
+        self.cfsection = None
+
+    def run(self):
         """
-        Setup the command line arguments and default config parameters
+        This method is to check the config file exist or not
         """
-        config = configparser.ConfigParser()
+        # Parse the arguments
+        arguments = self.parser.parse_args()
+        self.config = configparser.ConfigParser()
 
-        # print("reading")
-        config.read(r'C:\Users\guna\PycharmProjects\untitled5\setup.ini')
-        config.sections()
-        # print("sections done")
-        f = config['NETWORK']
-        self.port = int(f['PORT'])  # port
-        self.host = f['HOST']  # host
-        self.buff_size = int(f['BUFF_SIZE'])
+        if os.path.exists(arguments.confi):
+            self.cfread = self.config.read(arguments.confi)
+            print("\n--CONFIG FILE IMPORTED SUCCESSFULLY--")
+            return self.config
 
-    def listenn(self):
-        # print("socketing")
-        self.s = socket.socket()
-        self.s.bind((self.host, self.port))
-        print("listening...")
-        self.s.listen(5)
-
-    def handle_request(self):
-        conn, addr = self.s.accept()
-        print("======after accepting request=====")
-
-        print(f"got connection from{addr}")
-        self.prid = random.randint(4444, 5555)
-        print("====", self.prid)
-
-        self.client_data = conn.recv(self.buff_size)
-
-        # if re.match(str(r"<lance ID=1>"), str(self.client_data)):
-        #     print(f"received: {self.client_data}")
-        #     print('<message ok message>')
-        # else:
-        #     print('message wrong')
+        print("\n!!-FAILED TO IMPORT CONFIG FILE-!!")
+        sys.exit(0)
 
 
-class Messageparser(App):
-    def __init__(self):
-        super().__init__()
-        self.parser = argparse.ArgumentParser()
+class Server:
+    """
+    Handles the server
+    """
 
-    def messasge(self):
-        print("entered message module")
+    def __init__(self, config):
+        self.sock = socket.socket()
+        self.config = config
+        self.host = str(self.config['NETWORK']['HOST'])  # host
+        self.port = int(self.config['NETWORK']['PORT'])
+        self.buff_size = int(self.config['NETWORK']['BUFF_SIZE'])
 
-        print("argpass")
-        self.parser.add_argument('-l', '--lance', help="PASS THE ARGUMENTS HERE ")
-        self.parser.add_argument('--id', help="NAMING ID", type=int)
-        args = self.parser.parse_args()
-        print("args", args)
-        if args.lance:
-            print("boom")
+    def get_parser_message(self, conn_obj1):
+        """
+        getting the message
+        :param conn_obj1:
+        :return: error message
+        """
+        # p_id = os.fork()
+        # if p_id == 0:
+        #     print("child id is: ", os.getpid())  # diff
+        # print("Your Parent_id is:    ", os.getpid())  # same as ppid
+
+        message_obj = MessageParser()
+        ret_message = message_obj.parse(conn_obj1)
+        if ret_message is not None:
+            conn_obj1.send(f"<MESSAGE>{ret_message}</MESSAGE>".encode())
+        conn_obj1.close()
+
+    def handle_connection(self):
+        """
+        handles connection
+        :return: none
+        """
+        while True:
+            self.conn, addr = self.sock.accept()
+            print(f"\n:After accepting request:\n{addr}")
+            self.conn.send(b'connected\n', self.buff_size)
+            _thread.start_new_thread(self.get_parser_message, (self.conn,))
+
+    def get_conn(self):
+        """
+        method to return conn obj
+        :return:connection object
+        """
+        return self.conn
+
+    def startup(self):
+        """
+        starting the server
+        """
+        try:
+            self.sock.bind((self.host, self.port))
+            print(self.port)
+            print("\nListening...")
+            self.sock.listen(5)
+            self.handle_connection()
+        except Exception as ex:
+            print("\nBinding problem", ex)
+            sys.exit(-1)
+
+
+class MessageParser:
+    """
+    This class helps to parse the message under various condition to verify the pattern
+    """
+    msg = ''
+    id_num = None
+    id_list = []
+    dc_number = None
+    status = {}
+
+    def parse(self, conn_obj):
+        """
+
+        This module validate the message which is received from the client
+        the message must contains <TAG<space>ATTRIBUTE*>
+        here it must have <TAG ID_ATTRIBUTE M_ATTRIBUTE>
+        TAG = LANCE | TRACE
+
+        For LANCE AND TRACE
+        ID_ATTRIBUTE {id variable with the id name} = ID=[A-Za-z0-9]
+
+        FOR LANCE
+        M_ATTRIBUTE {module m variable with the process name or process with the node}
+        M = Pack.start or M=Pack
+        :param conn_obj:
+        """
+
+        global CLIENT_STRING
+        while True:
+
+            CLIENT_STRING = conn_obj.recv(1024)
+            if not CLIENT_STRING:
+                print("NO CLIENT STRING")
+                break
+            else:
+                # Validating <> symbol from the received string
+                match = re.findall('[<>]', str(CLIENT_STRING))
+                if len(match) != 2:
+                    return "More <> symbols found"
+                filtered_string = re.search('(<.+>)', str(CLIENT_STRING))
+                if not filtered_string:
+                    return "Missing  '<>'"
+                MessageParser.msg = filtered_string[0]
+
+                # <STRING>
+                match = re.match('<(.*)>', MessageParser.msg)
+                if not match:
+                    return " Missing < >"
+                payload = match.group(1)
+
+                # validating tag and attributes:
+                self.splitted_attribute = payload.split(' ')
+
+                # [lance,id=x,m=x] or [trace,id=x]
+                # the length of the lance  has to be 3 and the trace has to be 2
+                if len(self.splitted_attribute) > 3 or len(self.splitted_attribute) <= 1:
+                    return "Too many OR less attributes are given"
+                tag = self.splitted_attribute[0]
+
+                match = re.match('^(LANCE|TRACE)$', tag)
+                if not match:
+                    return "error in tag attribute"
+
+                # the trace must have length of two
+                if tag == 'LANCE':
+                    if len(self.splitted_attribute) < 3:
+                        return "Lance must contain module"
+                if tag == 'TRACE':
+                    if len(self.splitted_attribute) > 2:
+                        return "Trace must contain one attribute"
+
+                # checking id_attribute:
+                id_attribute = self.splitted_attribute[1]
+                match = re.match('(^ID=[A-za-z0-9]+$)', id_attribute)
+                if not match:
+                    return "error in id attribute"
+
+                # only the lance has the module attribute so getting m_attribute
+                # if the tag is lance and its length is 3
+                if len(self.splitted_attribute) == 3 and tag == 'LANCE':
+                    m_attribute = self.splitted_attribute[2]
+                    match = re.match('^M=[A-Z][a-z]+$', m_attribute)
+                    if match:
+                        dot = re.findall('[.]', str(match))
+                        if len(dot) > 2:
+                            return "multiple node operations"
+                    else:
+                        return "error in module attribute"
+
+                # message validated successfully so sending <ok>
+                if tag == 'LANCE':
+                    conn_obj.send(b'<MESSAGE>OK</MESSAGE>\n')
+                    conn_obj.close()
+                    l_error = self.lancemessage()
+
+                    return l_error
+                if tag == 'TRACE':
+                    t_error = self.tracemessage(conn_obj)
+                    return t_error
+
+        print("CONNECTION CLOSED")
+        conn_obj.close()
+        sys.exit(0)
+
+    def get_processclass(self):
+        """
+        called by lance_message()
+        it returns the error message from find_process()
+        """
+        cls_pr = Process()
+        mod_ret = cls_pr.findprocess(SERVER_OBJECT)
+        return mod_ret
+
+    def lancemessage(self):
+        """
+        if the tag is lance
+        :return: error message
+        """
+        # splitted attribute contains the message in list form
+        # separated by spaces
+        removed_attribute = self.splitted_attribute[1].split('=')
+        MessageParser.id_num = removed_attribute[1]
+        if MessageParser.id_num in MessageParser.id_list:
+            return 'Id Already Generated'
+
+        # storing ID's in a list
+        MessageParser.id_list.append(MessageParser.id_num)
+        MessageParser.status[MessageParser.id_num] = 'ID generated'
+
+        MessageParser.dc_number = random.randint(156140680, 156150800)
+        # gp contains the error returns from get_processclass()
+        gp_error = self.get_processclass()
+        return gp_error
+
+    def tracemessage(self, traceconnobj):
+        """
+        if the tag is trace
+        :param traceconnobj:
+        :return:error message
+        """
+        removed_attribute = self.splitted_attribute[1].split('=')
+        id_num = removed_attribute[1]
+        print("-TRACE user id:            ", MessageParser.id_num)
+        if id_num in MessageParser.status.keys():
+            reply = Process.process_reply(self)
+            traceconnobj.send(reply.encode())
+            traceconnobj.close()
         else:
-            print("errrrrr")
-class Launchmessage:
-    pass
-
-class Tracemessage:
-    pass
-
-def main():
-    c = App()
-    # m = Messageparser()
-    c.listenn()
-    c.handle_request()
-    # m.messasge()
+            print("TRACE ID Not present")
+            return "TRACE ID Not present"
+        sys.exit(-1)
 
 
-if __name__ == '__main__':
-    main()
+class Process:
+    """
+    This class find the process an search the node to process from the
+    given string
+    """
+    process_node = ''
+    process_class = ''
+    etat_status = ''
+    j = ''
+    di = {}
+    module_present = ''
 
+    def findprocess(self, obj_server):
 
+        """
+        finds the process and its node if present
+        :param obj_server:
+        :return: error message
+        """
+        self.new_conf = obj_server.config
+        print("ID LIST:", MessageParser.id_list)
+        print("MESSAGE:               ", MessageParser.msg)
+        process_at = re.findall('M=([^ <>]+)', MessageParser.msg)
 
+        # converting the m attributes into upper case
+        process_att = process_at[0].upper()
 
+        # if  process_att[Module] is present then it passes to if:
+        if len(process_at):
+            Process.module_present = True
+            split_proces = process_att.split('.')
 
+            # CONV.OPEN
+            # CONV , OPEN
+            if len(split_proces) == 2:
+                Process.module_present = True
 
+                # if Process.module_present = True
+                # means that module is given with the node
+                Process.process_class = split_proces[0]
+                Process.process_node = split_proces[1]
+            elif len(split_proces) == 1:
+                Process.module_present = False
 
+                # if process.module_present = False
+                # then it has only the module [class]
+                Process.process_class = split_proces[0]
+            # try:
 
+        # getting the module items from the Config file
+        # self.nodes_config will be in list of tuples format
+        self.nodes_config = list(self.new_conf.items('MODULES'))
+        print("nodes config:  ", self.nodes_config)
 
+        # first value contains the node name from config file
+        # self.nodes_config[0][1]
+        # [0]= start  [1]= node1
+        first_value = [j[0] for j in self.nodes_config]
 
+        # print("fisrt value:  ", first_value)
+        list_mod = []
+        for i in first_value:
+            list_mod.append(str(i).upper())
+        if not len(process_at):
+            return "No Module specified"
+        list_mod.append('Dummy')
 
+        # print("List of modules after: ", list_mod)
+        if Process.module_present:
 
+            # Checking the given node is present
+            if Process.process_node not in list_mod:
+                return 'NO node present inside '
 
+            # getting the index number of the node
+            module_index = list_mod.index(Process.process_node)
 
+            # process start from the index node
+            for j in list_mod[module_index:]:
+                Process.j = j
 
+                # if it reaches the end of the list
+                # updating the etat_status as 'attente'
+                if j == list_mod[-1]:
+                    Process.etat_status = 'ATTENTE'
+                    Process.j = list_mod[-2]
 
+                # until it reaches the end the MessageParser.status will be 'encours'
+                if j != list_mod[-1]:
+                    Process.etat_status = 'EN_COURS'
+                    self.searchmod()
 
+        if not Process.module_present:
+            print("No node given")
 
+            for j in list_mod:
+                print("j value:  ", j)
+                Process.j = j
+                Process.module_present = True
 
-# cmd and functionalities
+                if j == list_mod[-1]:
+                    Process.etat_status = 'ATTENTE'
+                    Process.j = list_mod[-2]
 
-'''
-print(sys.argv)
+                if j != list_mod[-1]:
+                    Process.etat_status = 'EN_COURS'
+                    mode, search_error = self.searchmod()
+                    if mode == 'wrong_mode':
+                        return search_error
 
-parser = argparse.ArgumentParser()
-parser.add_argument('option')   # 'option' is the 'dest'
-args = parser.parse_args()
-print(args)
+    def searchmod(self):
+        """
+        search the process name and the node name if present
+        :return:error message
+        """
+        # mapping the name to class object
+        Process.di = {"CONVERSION": Conversion(), "PACK": Pack()}
 
-if 'CREATE' in args.option:
-    print('creating')
-elif 'SHOW' in args.option:
-    print('showing')
-else:
-    print('else')
-'''
-
-import re
-import random
-
-
-class Message:
-
-    def __init__(self):
-        self.string = '<LANCE ID=Token1 M=Process.node2 COLOR=GREEN>'
-        self.randid = random.randint(333, 444)
-        self.result = re.split(' ', self.string.strip('<>'))
-        self.listid = []
-        self.m = ''
-        self.status = {'Token2': '2', 'Token3': 3, 'Token1': 4}
-
-    def classify(self):
-        print(self.result[0])
-        print(self.result[1])
-        print(self.result[2])
-        print(self.result[3])
-        self.m = str(self.result[2]).split('=')
-        # print("==", self.m)  Module to process M
-
-        if self.result[0] == 'LANCE' and self.m[0] == 'M':      # have to use regx for checking pattern
-            return Process.lapa(self)
-
-        elif self.result[0] == 'TRACE':
-            return Parsingmessage.trace(self)
+        if Process.process_class in Process.di.keys():
+            get_cls = Process.di.get(Process.process_class)
         else:
-            return "command error"
+            print("wrong module")
+            return 'wrong_mode', 'Type of Module is not present'
+        Process.node_name = self.new_conf['MODULES'][Process.j]
+
+        # print("PROCESS STARTS FROM P_NODE_NAME :   ", Process.node_name)
+        if Process.node_name == self.new_conf['MODULES']\
+                .get(str(self.nodes_config[0][0]).upper()):
+            if Process.module_present:
+                eval("get_cls.node1()")
+        elif Process.node_name == self.new_conf['MODULES']\
+                .get(str(self.nodes_config[1][0]).upper()):
+            if Process.module_present:
+                eval("get_cls.node2()")
+        elif Process.node_name == self.new_conf['MODULES']\
+                .get(str(self.nodes_config[2][0]).upper()):
+            if Process.module_present:
+                eval("get_cls.node3()")
+
+        return None, None
+
+    def process_reply(self):
+        """
+        reply message for trace
+        :return: all the variable
+        """
+        date_frmt = (datetime.datetime.now()).strftime("%d/%m/%Y %H:%M:%S")
+        module_present = str(Process.process_class) + '.' + str(Process.j)
+        user = 'nil'
+        typ_e = 'nil'
+        dat_el = 'nil'
+        pri_value = 0
+        status_etat = Process.etat_status
+        alias = module_present
+        nbj_value = 1
+        dc_number = MessageParser.dc_number
+        mes_type = "nil"
+        allinone = (f'''<TRACE DC={dc_number}>\n
+ <LISM M={module_present}>\r\n
+  <DOC ID={MessageParser.id_num} APP={Process.process_class} USER={user} TYPE={typ_e} DATEL={dat_el} NBP=1 PRI={pri_value} ETAT={status_etat} ALIAS={alias} NBJ={nbj_value} MES="{mes_type}" HDEB="{date_frmt}">\r\n
+ </LISM>\r\n
+</TRACE>\n''')
+        return allinone
 
 
-class Parsingmessage(Message):
-    def __init__(self):
-        super().__init__()  # try adding self inside  'doubt?'
-        self.id_number = ''
-        self.id_split = ''
-        self.action = ''
-
-    def lapa(self):
-        # print("reached launch class")
-        self.id_split = str(self.result[1]).split('=')   # splitting ID=Tokenid with =
-        # print(self.id_split)                           # id_split [id, token]
-        self.id_number = self.id_split[1]
-        # print(self.id_number)                          # id_number [id]
-        self.listid.append(self.id_number)
-        # print("added in list")
-        self.status[self.id_number] = "id generated"     # updating the status of the ID
-        # print(self.status, self.listid)
-        # print(self.m[1])                               # m[1] = after'M='  Process.node1
-        d = self.m[1]
-
-        if d == 'Process.node1':
-            return Process.node1(self)
-        return Process.node2(self)
-
-        # def trace(self):
-        #     print("reached Trace module")
-        #     self.id_split = str(self.result[1]).split('=')
-        #     print(self.id_split)
-        #     self.id_number = self.id_split[1]
-        #     print(self.id_number)
-        # if self.id_number in self.status.keys():
-        #     print(self.status.get(self.id_number))
-        # else:
-        #     print("no id is present")
-
-
-class Process(Parsingmessage):
-    def __init__(self):
-        super().__init__()
+class Pack:
+    """
+    This class does the packing process
+    """
 
     def node1(self):
-        print('node == 1')
-        self.status[self.id_number] = 'Hey im still here in Node-1 '
-        print(self.status)
+        """node_1 """
+        MessageParser.status[MessageParser.id_num] = 'CONVERSION Node STARTED '
+        print("NODE1 status:           ", MessageParser.status)
 
     def node2(self):
-        print('node ====2')
-        self.status[self.id_number] = 'Now im in the second Node'
+        """node_2 """
+        time.sleep(2)
+        MessageParser.status[MessageParser.id_num] = 'CONVERSION Node NOW AT THE END '
+        print("NODE2 status:           ", MessageParser.status)
+
+    def node3(self):
+        """node_3 """
+        MessageParser.status[MessageParser.id_num] = 'CONVERSION Node NOW AT THE SAVE '
+        time.sleep(2)
+        print("NODE3 status:           ", MessageParser.status)
+
+
+class Conversion:
+    """
+    This class does the conversion process
+    """
+
+    def node1(self):
+        """node_1 """
+        print("\nBefore Node1 starts:   ", MessageParser.status)
+        MessageParser.status[MessageParser.id_num] = 'CONVERSION Node STARTED '
+        print("NODE1 status:           ", MessageParser.status)
+
+    def node2(self):
+        """node_2 """
+        MessageParser.status[MessageParser.id_num] = 'CONVERSION NODE IS NOW AT THE END'
+        print("\nNode2 status:        ", MessageParser.status)
+
+    def node3(self):
+        """node_3 """
+        MessageParser.status[MessageParser.id_num] = 'CONVERSION Node NOW AT THE SAVE '
+        print("NODE3 status:           ", MessageParser.status)
 
 
 if __name__ == '__main__':
-    m = Message()
-    m.classify()
-    l = Parsingmessage()
+    APP_OBJECT = App().run()
+    SERVER_OBJECT = Server(APP_OBJECT)
+    SERVER_OBJECT.startup()
