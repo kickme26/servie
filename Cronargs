@@ -25,7 +25,7 @@ class App:
         # Add the positional parameter
         self.parser.add_argument('-confi', help="Enter the config path followed\
                                  by the -conficommand", required=False,
-                                 default=r"/home/dev/PycharmProjects/mcq/Workflow/setup.ini")
+                                 default=r"setup.ini")
         self.cfread = None
         self.config = None
         self.conn = None
