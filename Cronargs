@@ -19,12 +19,13 @@ CLIENT_STRING = None
 
 class App:
     """This class checks the config file a"""
+
     def __init__(self):
         self.parser = argparse.ArgumentParser(description="Sample Project")
         # Add the positional parameter
         self.parser.add_argument('-confi', help="Enter the config path followed\
                                  by the -conficommand", required=False,
-                                 default=r"C:\Users\jouve\PycharmProjects\untitled6\mytext.ini")
+                                 default=r"/home/dev/PycharmProjects/mcq/Workflow/setup.ini")
         self.cfread = None
         self.config = None
         self.conn = None
@@ -58,6 +59,7 @@ class Server:
         self.host = str(self.config['NETWORK']['HOST'])  # host
         self.port = int(self.config['NETWORK']['PORT'])
         self.buff_size = int(self.config['NETWORK']['BUFF_SIZE'])
+        self.conn = ''
 
     def get_parser_message(self, conn_obj1):
         """
@@ -73,7 +75,7 @@ class Server:
         message_obj = MessageParser()
         ret_message = message_obj.parse(conn_obj1)
         if ret_message is not None:
-            conn_obj1.send(f"<MESSAGE>{ret_message}</MESSAGE>".encode())
+            conn_obj1.send(f"<MESSAGE>{ret_message}</MESSAGE>".encode(encoding='UTF-8'))
         conn_obj1.close()
 
     def handle_connection(self):
@@ -118,6 +120,9 @@ class MessageParser:
     id_list = []
     dc_number = None
     status = {}
+
+    def __init__(self):
+        self.splitted_attribute = ''
 
     def parse(self, conn_obj):
         """
@@ -190,7 +195,7 @@ class MessageParser:
                 # if the tag is lance and its length is 3
                 if len(self.splitted_attribute) == 3 and tag == 'LANCE':
                     m_attribute = self.splitted_attribute[2]
-                    match = re.match('^M=[A-Z][a-z]+$', m_attribute)
+                    match = re.match('^M=[A-Z][a-z.]+$', m_attribute)
                     if match:
                         dot = re.findall('[.]', str(match))
                         if len(dot) > 2:
@@ -201,9 +206,7 @@ class MessageParser:
                 # message validated successfully so sending <ok>
                 if tag == 'LANCE':
                     conn_obj.send(b'<MESSAGE>OK</MESSAGE>\n')
-                    conn_obj.close()
                     l_error = self.lancemessage()
-
                     return l_error
                 if tag == 'TRACE':
                     t_error = self.tracemessage(conn_obj)
@@ -273,6 +276,10 @@ class Process:
     j = ''
     di = {}
     module_present = ''
+
+    def __init__(self):
+        self.new_conf = None
+        self.nodes_config = None
 
     def findprocess(self, obj_server):
 
@@ -352,8 +359,9 @@ class Process:
                 # until it reaches the end the MessageParser.status will be 'encours'
                 if j != list_mod[-1]:
                     Process.etat_status = 'EN_COURS'
-                    self.searchmod()
-
+                    mode_1, search_error_1 = self.searchmod()
+                    if mode_1 == 'wrong_mode':
+                        return search_error_1
         if not Process.module_present:
             print("No node given")
 
@@ -382,21 +390,22 @@ class Process:
 
         if Process.process_class in Process.di.keys():
             get_cls = Process.di.get(Process.process_class)
+            print("get classs: ", get_cls)
         else:
             print("wrong module")
             return 'wrong_mode', 'Type of Module is not present'
         Process.node_name = self.new_conf['MODULES'][Process.j]
 
         # print("PROCESS STARTS FROM P_NODE_NAME :   ", Process.node_name)
-        if Process.node_name == self.new_conf['MODULES']\
+        if Process.node_name == self.new_conf['MODULES'] \
                 .get(str(self.nodes_config[0][0]).upper()):
             if Process.module_present:
                 eval("get_cls.node1()")
-        elif Process.node_name == self.new_conf['MODULES']\
+        elif Process.node_name == self.new_conf['MODULES'] \
                 .get(str(self.nodes_config[1][0]).upper()):
             if Process.module_present:
                 eval("get_cls.node2()")
-        elif Process.node_name == self.new_conf['MODULES']\
+        elif Process.node_name == self.new_conf['MODULES'] \
                 .get(str(self.nodes_config[2][0]).upper()):
             if Process.module_present:
                 eval("get_cls.node3()")
